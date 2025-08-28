@@ -1,60 +1,39 @@
-export default {
-  async fetch(request, env) {
-    const url = new URL(request.url);
+const GITHUB_RAW_URL = "https://raw.githubusercontent.com/USERNAME/secret-finder-data/main/extra_items.json";
 
-    // ✅ GET / -> tes online
-    if (url.pathname === "/") {
-      return new Response("Worker online ✅", { status: 200 });
+addEventListener("fetch", event => {
+  event.respondWith(handleRequest(event.request))
+})
+
+async function handleRequest(request) {
+  if (request.method === "POST") {
+    try {
+      const data = await request.json(); // { itemName, player, timestamp, serverId }
+      let currentItems = await SECRET_ITEMS.get("foundItems", { type: "json" }) || [];
+      currentItems.push(data);
+      await SECRET_ITEMS.put("foundItems", JSON.stringify(currentItems));
+      return new Response(JSON.stringify({ status: "success" }), { status: 200 });
+    } catch (err) {
+      return new Response(JSON.stringify({ status: "error", message: err.message }), { status: 400 });
     }
-
-    // ✅ POST /log -> simpan data dari bot ke KV
-    if (url.pathname === "/log" && request.method === "POST") {
-      try {
-        const body = await request.json();
-
-        // simpan data di KV (key = timestamp, value = JSON)
-        const key = `log-${Date.now()}`;
-        await env.ROBOT_DATA.put(key, JSON.stringify(body));
-
-        return new Response(
-          JSON.stringify({ success: true, savedAs: key }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        );
-      } catch (e) {
-        return new Response("Invalid JSON", { status: 400 });
-      }
-    }
-
-    // ✅ GET /list -> ambil semua log
-    if (url.pathname === "/list") {
-      const keys = await env.ROBOT_DATA.list();
-      let allData = [];
-
-      for (const k of keys.keys) {
-        const val = await env.ROBOT_DATA.get(k.name);
-        if (val) allData.push({ key: k.name, data: JSON.parse(val) });
-      }
-
-      return new Response(JSON.stringify(allData, null, 2), {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    // ✅ GET /secret -> contoh akses terakhir
-    if (url.pathname === "/secret") {
-      const keys = await env.ROBOT_DATA.list({ limit: 1 });
-      if (keys.keys.length === 0) {
-        return new Response("No secret found", { status: 404 });
-      }
-
-      const val = await env.ROBOT_DATA.get(keys.keys[0].name);
-      return new Response(val, {
-        status: 200,
-        headers: { "Content-Type": "application/json" }
-      });
-    }
-
-    return new Response("Not found", { status: 404 });
   }
-};
+
+  if (request.method === "GET") {
+    try {
+      const response = await fetch(GITHUB_RAW_URL);
+      const githubData = await response.json();
+      await SECRET_ITEMS.put("extraItemsFromGitHub", JSON.stringify(githubData));
+
+      const foundItems = await SECRET_ITEMS.get("foundItems", { type: "json" }) || [];
+
+      return new Response(JSON.stringify({
+        status: "success",
+        foundItems,
+        extraItems: githubData
+      }), { headers: { "Content-Type": "application/json" }});
+    } catch (err) {
+      return new Response(JSON.stringify({ status: "error", message: err.message }), { status: 500 });
+    }
+  }
+
+  return new Response("Method not allowed", { status: 405 });
+}
