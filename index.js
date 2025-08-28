@@ -1,4 +1,4 @@
-const GITHUB_RAW_URL = "https://raw.githubusercontent.com/USERNAME/secret-finder-data/main/extra_items.json";
+const GITHUB_RAW_URL = "https://raw.githubusercontent.com/zNile1997/Finder_90s/main/extra_items.json";
 
 addEventListener("fetch", event => {
   event.respondWith(handleRequest(event.request))
